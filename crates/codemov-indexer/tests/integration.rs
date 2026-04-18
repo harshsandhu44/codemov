@@ -2,9 +2,9 @@ use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
 
-use codemov_core::{ImportKind, Language, SymbolKind};
+use codemov_core::{ImportKind, Language, SymbolKind, TaskType};
 use codemov_indexer::{index, IndexOptions};
-use codemov_storage::Store;
+use codemov_storage::{build_context_pack, ContextRequest, Store};
 
 fn make_fixture() -> TempDir {
     let dir = tempfile::tempdir().unwrap();
@@ -366,4 +366,291 @@ fn stats_json_shape() {
     assert!(entry.get("language").is_some());
     assert!(entry.get("byte_size").is_some());
     assert!(entry.get("symbol_count").is_some());
+}
+
+// ── context pack tests ────────────────────────────────────────────────────────
+
+#[test]
+fn context_symbol_target_finds_file_and_symbols() {
+    let fixture = fixture_path("rust-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    let req = ContextRequest {
+        task: TaskType::Explain,
+        target: "Point",
+        max_tokens: 4000,
+        root: &fixture,
+    };
+    let pack = build_context_pack(&store, &req).unwrap();
+
+    assert_eq!(pack.task, TaskType::Explain);
+    assert_eq!(pack.target, "Point");
+    assert!(
+        !pack.selected_files.is_empty(),
+        "should select at least one file"
+    );
+    assert!(!pack.selected_symbols.is_empty(), "should select symbols");
+
+    // 'Point' symbol should be present
+    assert!(
+        pack.selected_symbols.iter().any(|s| s.name == "Point"),
+        "expected Point in selected symbols"
+    );
+
+    // file containing Point should be selected
+    let lib_path = fixture.join("src/lib.rs").canonicalize().unwrap();
+    assert!(
+        pack.selected_files.iter().any(|f| f.path == lib_path),
+        "lib.rs should be selected"
+    );
+}
+
+#[test]
+fn context_file_target_selects_symbols_from_file() {
+    let fixture = fixture_path("rust-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    let req = ContextRequest {
+        task: TaskType::Bugfix,
+        target: "src/lib.rs",
+        max_tokens: 4000,
+        root: &fixture,
+    };
+    let pack = build_context_pack(&store, &req).unwrap();
+
+    assert!(
+        !pack.selected_files.is_empty(),
+        "target file should be selected"
+    );
+
+    // target file should rank 1.0
+    assert_eq!(
+        pack.selected_files[0].score, 1.0,
+        "exact file match should score 1.0"
+    );
+
+    // symbols from the file should be included
+    let sym_names: Vec<&str> = pack
+        .selected_symbols
+        .iter()
+        .map(|s| s.name.as_str())
+        .collect();
+    assert!(sym_names.contains(&"add"), "expected fn add");
+    assert!(sym_names.contains(&"Point"), "expected struct Point");
+}
+
+#[test]
+fn context_token_budget_excludes_when_tight() {
+    let fixture = fixture_path("rust-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    let tight = ContextRequest {
+        task: TaskType::Review,
+        target: "src/lib.rs",
+        max_tokens: 10, // very tight
+        root: &fixture,
+    };
+    let tight_pack = build_context_pack(&store, &tight).unwrap();
+
+    let full = ContextRequest {
+        task: TaskType::Review,
+        target: "src/lib.rs",
+        max_tokens: 8000,
+        root: &fixture,
+    };
+    let full_pack = build_context_pack(&store, &full).unwrap();
+
+    assert!(
+        tight_pack.selected_symbols.len() <= full_pack.selected_symbols.len(),
+        "tight budget should select fewer or equal symbols"
+    );
+    assert!(
+        tight_pack.estimated_total_tokens <= tight_pack.max_tokens,
+        "estimated tokens must not exceed budget"
+    );
+    assert!(
+        full_pack.excluded.len() <= tight_pack.excluded.len(),
+        "full budget should have fewer or equal exclusions"
+    );
+}
+
+#[test]
+fn context_ordering_is_deterministic() {
+    let fixture = fixture_path("rust-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    let req = ContextRequest {
+        task: TaskType::Feature,
+        target: "add",
+        max_tokens: 4000,
+        root: &fixture,
+    };
+
+    let pack_a = build_context_pack(&store, &req).unwrap();
+    let pack_b = build_context_pack(&store, &req).unwrap();
+
+    let files_a: Vec<_> = pack_a
+        .selected_files
+        .iter()
+        .map(|f| f.path.clone())
+        .collect();
+    let files_b: Vec<_> = pack_b
+        .selected_files
+        .iter()
+        .map(|f| f.path.clone())
+        .collect();
+    assert_eq!(files_a, files_b, "file order must be deterministic");
+
+    let syms_a: Vec<_> = pack_a
+        .selected_symbols
+        .iter()
+        .map(|s| s.name.clone())
+        .collect();
+    let syms_b: Vec<_> = pack_b
+        .selected_symbols
+        .iter()
+        .map(|s| s.name.clone())
+        .collect();
+    assert_eq!(syms_a, syms_b, "symbol order must be deterministic");
+}
+
+#[test]
+fn context_json_shape_is_stable() {
+    let fixture = fixture_path("rust-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    let req = ContextRequest {
+        task: TaskType::Explain,
+        target: "Shape",
+        max_tokens: 4000,
+        root: &fixture,
+    };
+    let pack = build_context_pack(&store, &req).unwrap();
+    let json = serde_json::to_string(&pack).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+    assert!(v.get("task").is_some());
+    assert!(v.get("target").is_some());
+    assert!(v.get("max_tokens").is_some());
+    assert!(v.get("estimated_total_tokens").is_some());
+    assert!(v.get("selected_files").is_some());
+    assert!(v.get("selected_symbols").is_some());
+    assert!(v.get("snippets").is_some());
+    assert!(v.get("excluded").is_some());
+    assert_eq!(v["task"], "explain");
+    assert_eq!(v["target"], "Shape");
+}
+
+#[test]
+fn context_snippet_extraction_reads_code() {
+    let fixture = fixture_path("rust-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    let req = ContextRequest {
+        task: TaskType::Explain,
+        target: "add",
+        max_tokens: 8000,
+        root: &fixture,
+    };
+    let pack = build_context_pack(&store, &req).unwrap();
+
+    assert!(
+        !pack.snippets.is_empty(),
+        "should extract at least one snippet"
+    );
+    for sn in &pack.snippets {
+        assert!(!sn.code.is_empty(), "snippet code should not be empty");
+        assert!(sn.end_line >= sn.start_line, "end >= start");
+    }
+}
+
+#[test]
+fn context_feature_task_boosts_trait_score() {
+    let fixture = fixture_path("rust-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    let feature_req = ContextRequest {
+        task: TaskType::Feature,
+        target: "src/lib.rs",
+        max_tokens: 8000,
+        root: &fixture,
+    };
+    let feature_pack = build_context_pack(&store, &feature_req).unwrap();
+
+    let bugfix_req = ContextRequest {
+        task: TaskType::Bugfix,
+        target: "src/lib.rs",
+        max_tokens: 8000,
+        root: &fixture,
+    };
+    let bugfix_pack = build_context_pack(&store, &bugfix_req).unwrap();
+
+    // 'Shape' is a trait; it should score higher in feature than in bugfix
+    let shape_feature = feature_pack
+        .selected_symbols
+        .iter()
+        .find(|s| s.name == "Shape");
+    let shape_bugfix = bugfix_pack
+        .selected_symbols
+        .iter()
+        .find(|s| s.name == "Shape");
+
+    if let (Some(sf), Some(sb)) = (shape_feature, shape_bugfix) {
+        // feature should rank Shape at least as high as bugfix
+        let pos_feature = feature_pack
+            .selected_symbols
+            .iter()
+            .position(|s| s.name == "Shape")
+            .unwrap();
+        let pos_bugfix = bugfix_pack
+            .selected_symbols
+            .iter()
+            .position(|s| s.name == "Shape")
+            .unwrap();
+        let _ = (sf, sb); // used above
+        assert!(
+            pos_feature <= pos_bugfix,
+            "Shape (trait) should rank at least as high in feature task (pos {pos_feature}) vs bugfix (pos {pos_bugfix})"
+        );
+    }
+}
+
+#[test]
+fn context_empty_target_returns_empty_pack() {
+    let fixture = fixture_path("rust-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    let req = ContextRequest {
+        task: TaskType::Review,
+        target: "zzz_nonexistent_symbol_xyz",
+        max_tokens: 4000,
+        root: &fixture,
+    };
+    let pack = build_context_pack(&store, &req).unwrap();
+
+    assert!(
+        pack.selected_files.is_empty(),
+        "no files for unknown target"
+    );
+    assert!(
+        pack.selected_symbols.is_empty(),
+        "no symbols for unknown target"
+    );
+    assert_eq!(pack.estimated_total_tokens, 0);
 }

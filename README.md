@@ -82,6 +82,49 @@ codemov overview [path]
 codemov overview [path] --json
 ```
 
+**Context** — build a task-aware context pack under a token budget:
+
+```sh
+codemov context --task <type> --target <query-or-file> [--max-tokens <n>] [path] [--json]
+```
+
+Returns the most relevant files, symbols, and snippets for a coding task, ranked and selected within the given token budget (default: 4000).
+
+Task types:
+- `explain` — prioritizes central files, matched symbols, direct dependencies, and overview snippets
+- `bugfix` — prioritizes the target file, its dependents (callers), and near-matching symbols
+- `feature` — boosts extension points (traits, interfaces), nearby modules, and import/export surfaces
+- `review` — prioritizes the target file, exported API surface, and direct dependencies
+
+The `--target` can be a file path (e.g. `src/parser/mod.rs`) or a symbol/text query (e.g. `Store`). File targets are resolved to the index; symbol queries use prefix/substring matching.
+
+```
+$ codemov context --task explain --target Store --max-tokens 3000
+task:   explain
+target: Store
+tokens: 1820 / 3000 budget
+
+files (2):
+  [0.90] src/store.rs  (4 tokens)  — contains matched symbol
+  ...
+
+symbols (3):
+  Store                struct       src/store.rs:19-21  — exact symbol name match
+  ...
+
+snippets (3):
+  src/store.rs:19-21  — exact symbol name match
+    pub struct Store {
+        conn: Connection,
+    }
+```
+
+```sh
+codemov context --task bugfix --target src/parser/mod.rs --max-tokens 4000 --json
+```
+
+If the budget is too low to include all candidates, the highest-signal subset is returned and lower-priority items appear under `excluded`.
+
 **Trace impact** — show direct import dependencies and dependents for a file:
 
 ```sh
@@ -114,7 +157,7 @@ Import edges are stored in the SQLite database. Relative TS/JS imports (`./`, `.
 
 ```
 crates/
-  codemov-core      shared domain types (Language, Symbol, ImportEdge, SymbolMatch, …)
+  codemov-core      shared domain types (Language, Symbol, ImportEdge, SymbolMatch, ContextPack, …)
   codemov-parser    tree-sitter adapters for Rust and TypeScript/JavaScript
   codemov-storage   SQLite persistence via rusqlite (files, symbols, import_edges)
   codemov-indexer   file walker, language detection, indexing pipeline
@@ -134,4 +177,4 @@ cargo test --workspace
 cargo fmt --all
 ```
 
-Tests cover symbol extraction, golden line-number assertions against fixture repos, incremental indexing determinism, import edge extraction, `find-symbol` ranking, resolved path graph queries, and JSON output shapes.
+Tests cover symbol extraction, golden line-number assertions against fixture repos, incremental indexing determinism, import edge extraction, `find-symbol` ranking, resolved path graph queries, JSON output shapes, and context pack generation (symbol targets, file targets, token budgeting, deterministic ordering, snippet extraction, task-specific scoring).
