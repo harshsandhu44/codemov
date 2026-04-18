@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
 
+use codemov_core::SymbolKind;
 use codemov_indexer::{index, IndexOptions};
 use codemov_storage::Store;
 
@@ -108,7 +109,10 @@ fn golden_ts_basic_symbols() {
     assert!(names.contains(&"Handler"), "missing type Handler");
     assert!(names.contains(&"EventBus"), "missing class EventBus");
     assert!(names.contains(&"createConfig"), "missing fn createConfig");
-    assert!(names.contains(&"DEFAULT_TIMEOUT"), "missing const DEFAULT_TIMEOUT");
+    assert!(
+        names.contains(&"DEFAULT_TIMEOUT"),
+        "missing const DEFAULT_TIMEOUT"
+    );
     assert!(names.contains(&"formatPath"), "missing arrow fn formatPath");
 
     let utils_path = fixture.join("src/utils.ts");
@@ -144,4 +148,54 @@ fn golden_incremental_is_deterministic() {
         assert_eq!(a.start_line, b.start_line);
         assert_eq!(a.end_line, b.end_line);
     }
+}
+
+#[test]
+fn find_symbol_exact_match_ranks_first() {
+    let fixture = fixture_path("rust-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    let matches = store.find_symbols("add").unwrap();
+    assert!(!matches.is_empty(), "should find 'add'");
+    assert_eq!(matches[0].name, "add", "exact match must rank first");
+    assert_eq!(matches[0].kind, SymbolKind::Function);
+}
+
+#[test]
+fn find_symbol_prefix_match() {
+    let fixture = fixture_path("rust-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    let matches = store.find_symbols("Rect").unwrap();
+    assert!(!matches.is_empty(), "should prefix-match Rectangle");
+    assert!(matches.iter().any(|m| m.name == "Rectangle"));
+}
+
+#[test]
+fn find_symbol_no_match() {
+    let fixture = fixture_path("rust-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    let matches = store.find_symbols("zzz_nonexistent").unwrap();
+    assert!(matches.is_empty());
+}
+
+#[test]
+fn find_symbol_result_is_stable() {
+    let fixture = fixture_path("rust-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    let first = store.find_symbols("a").unwrap();
+    let second = store.find_symbols("a").unwrap();
+    let names_first: Vec<&str> = first.iter().map(|m| m.name.as_str()).collect();
+    let names_second: Vec<&str> = second.iter().map(|m| m.name.as_str()).collect();
+    assert_eq!(names_first, names_second, "results must be deterministic");
 }
