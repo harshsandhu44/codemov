@@ -65,6 +65,17 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Show direct import dependencies and dependents for a file
+    TraceImpact {
+        /// File to trace (relative to repo root or absolute)
+        file: PathBuf,
+        /// Repo root (defaults to current directory)
+        #[arg(short, long, default_value = ".")]
+        path: PathBuf,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() {
@@ -76,6 +87,7 @@ fn main() {
         Command::Stats { path, json } => commands::stats(&path, json),
         Command::Overview { path, json } => commands::overview(&path, json),
         Command::FindSymbol { query, path, json } => commands::find_symbol(&path, &query, json),
+        Command::TraceImpact { file, path, json } => commands::trace_impact(&path, &file, json),
     };
 
     if let Err(e) = result {

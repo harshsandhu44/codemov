@@ -219,9 +219,15 @@ fn golden_mixed_basic_symbols() {
     let ts_path = fixture.join("src/config.ts");
     let ts_syms = store.get_symbols_for_file(&ts_path).unwrap();
     let ts_names: Vec<&str> = ts_syms.iter().map(|s| s.name.as_str()).collect();
-    assert!(ts_names.contains(&"AppConfig"), "missing interface AppConfig");
+    assert!(
+        ts_names.contains(&"AppConfig"),
+        "missing interface AppConfig"
+    );
     assert!(ts_names.contains(&"loadConfig"), "missing fn loadConfig");
-    assert!(ts_names.contains(&"DEFAULT_PORT"), "missing const DEFAULT_PORT");
+    assert!(
+        ts_names.contains(&"DEFAULT_PORT"),
+        "missing const DEFAULT_PORT"
+    );
 }
 
 #[test]
@@ -301,6 +307,41 @@ fn overview_json_shape() {
     assert!(v.get("total_symbols").is_some());
     assert!(v.get("files_by_language").is_some());
     assert!(v.get("symbols_by_language").is_some());
+}
+
+#[test]
+fn trace_impact_ts_basic() {
+    let fixture = fixture_path("ts-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    let index_ts = fixture.join("src/index.ts").canonicalize().unwrap();
+    let utils_ts = fixture.join("src/utils.ts").canonicalize().unwrap();
+
+    // utils.ts imports ./index → index.ts should appear as its dependency
+    let deps = store.get_dependencies(&utils_ts).unwrap();
+    assert!(
+        deps.contains(&index_ts),
+        "utils.ts should depend on index.ts; got: {:?}",
+        deps
+    );
+
+    // index.ts should appear as a dependent of nothing here (it imports only packages)
+    let deps_of_index = store.get_dependencies(&index_ts).unwrap();
+    assert!(
+        deps_of_index.is_empty(),
+        "index.ts has no relative imports; got: {:?}",
+        deps_of_index
+    );
+
+    // index.ts should show utils.ts as a dependent
+    let dependents = store.get_dependents(&index_ts).unwrap();
+    assert!(
+        dependents.contains(&utils_ts),
+        "index.ts should be depended on by utils.ts; got: {:?}",
+        dependents
+    );
 }
 
 #[test]

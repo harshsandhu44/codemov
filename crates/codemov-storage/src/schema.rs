@@ -28,9 +28,13 @@ CREATE TABLE IF NOT EXISTS import_edges (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     source_file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
     target_raw     TEXT    NOT NULL,
+    resolved_path  TEXT,
     kind           TEXT    NOT NULL,
     line           INTEGER NOT NULL
 )";
+
+pub const MIGRATE_IMPORT_EDGES_RESOLVED_PATH: &str =
+    "ALTER TABLE import_edges ADD COLUMN resolved_path TEXT";
 
 pub const CREATE_IDX_IMPORT_SOURCE: &str =
     "CREATE INDEX IF NOT EXISTS idx_import_source ON import_edges(source_file_id)";

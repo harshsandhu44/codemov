@@ -136,6 +136,7 @@ fn collect_import_nodes(node: Node, source: &[u8], out: &mut Vec<ImportEdge>) {
                     out.push(ImportEdge {
                         source_path: std::path::PathBuf::new(),
                         target_raw: target,
+                        resolved_path: None,
                         kind: ImportKind::Import,
                         line: node.start_position().row as u32 + 1,
                     });
@@ -150,6 +151,7 @@ fn collect_import_nodes(node: Node, source: &[u8], out: &mut Vec<ImportEdge>) {
                     out.push(ImportEdge {
                         source_path: std::path::PathBuf::new(),
                         target_raw: target,
+                        resolved_path: None,
                         kind: ImportKind::Export,
                         line: node.start_position().row as u32 + 1,
                     });
@@ -170,6 +172,7 @@ fn collect_import_nodes(node: Node, source: &[u8], out: &mut Vec<ImportEdge>) {
                                     out.push(ImportEdge {
                                         source_path: std::path::PathBuf::new(),
                                         target_raw: target,
+                                        resolved_path: None,
                                         kind: ImportKind::Require,
                                         line: node.start_position().row as u32 + 1,
                                     });

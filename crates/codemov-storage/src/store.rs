@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -31,6 +31,8 @@ impl Store {
         conn.execute_batch(schema::CREATE_IDX_SYMBOLS_FILE)?;
         conn.execute_batch(schema::CREATE_IMPORT_EDGES)?;
         conn.execute_batch(schema::CREATE_IDX_IMPORT_SOURCE)?;
+        // migration: add resolved_path to existing DBs that predate this column
+        let _ = conn.execute(schema::MIGRATE_IMPORT_EDGES_RESOLVED_PATH, []);
         Ok(Self { conn })
     }
 
@@ -228,13 +230,19 @@ impl Store {
             params![file_id],
         )?;
         let mut stmt = self.conn.prepare_cached(
-            "INSERT INTO import_edges (source_file_id, target_raw, kind, line)
-             VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO import_edges (source_file_id, target_raw, resolved_path, kind, line)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
         )?;
         for edge in edges {
+            let resolved = edge
+                .resolved_path
+                .as_deref()
+                .and_then(|p| p.to_str())
+                .map(str::to_owned);
             stmt.execute(params![
                 file_id,
                 edge.target_raw,
+                resolved,
                 edge.kind.as_str(),
                 edge.line
             ])?;
@@ -250,18 +258,19 @@ impl Store {
             |r| r.get(0),
         )?;
         let mut stmt = self.conn.prepare(
-            "SELECT target_raw, kind, line FROM import_edges WHERE source_file_id = ?1 ORDER BY line",
+            "SELECT target_raw, resolved_path, kind, line FROM import_edges WHERE source_file_id = ?1 ORDER BY line",
         )?;
         let rows = stmt.query_map(params![file_id], |r| {
             Ok((
                 r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, u32>(2)?,
+                r.get::<_, Option<String>>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, u32>(3)?,
             ))
         })?;
         let mut out = Vec::new();
         for row in rows {
-            let (target_raw, kind_str, line) = row?;
+            let (target_raw, resolved_raw, kind_str, line) = row?;
             let kind = match kind_str.as_str() {
                 "use" => ImportKind::Use,
                 "import" => ImportKind::Import,
@@ -272,9 +281,48 @@ impl Store {
             out.push(ImportEdge {
                 source_path: path.to_path_buf(),
                 target_raw,
+                resolved_path: resolved_raw.map(PathBuf::from),
                 kind,
                 line,
             });
+        }
+        Ok(out)
+    }
+
+    /// Files that `path` directly imports (resolved paths only).
+    pub fn get_dependencies(&self, path: &Path) -> Result<Vec<PathBuf>, StoreError> {
+        let path_str = path.to_str().ok_or(StoreError::InvalidPath)?;
+        let file_id: i64 = self.conn.query_row(
+            "SELECT id FROM files WHERE path = ?1",
+            params![path_str],
+            |r| r.get(0),
+        )?;
+        let mut stmt = self.conn.prepare(
+            "SELECT DISTINCT resolved_path FROM import_edges
+             WHERE source_file_id = ?1 AND resolved_path IS NOT NULL
+             ORDER BY resolved_path",
+        )?;
+        let rows = stmt.query_map(params![file_id], |r| r.get::<_, String>(0))?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(PathBuf::from(row?));
+        }
+        Ok(out)
+    }
+
+    /// Files that directly import `path` (by resolved path).
+    pub fn get_dependents(&self, path: &Path) -> Result<Vec<PathBuf>, StoreError> {
+        let path_str = path.to_str().ok_or(StoreError::InvalidPath)?;
+        let mut stmt = self.conn.prepare(
+            "SELECT DISTINCT f.path FROM import_edges e
+             JOIN files f ON f.id = e.source_file_id
+             WHERE e.resolved_path = ?1
+             ORDER BY f.path",
+        )?;
+        let rows = stmt.query_map(params![path_str], |r| r.get::<_, String>(0))?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(PathBuf::from(row?));
         }
         Ok(out)
     }

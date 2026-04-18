@@ -90,6 +90,7 @@ fn collect_use_decls(node: Node, source: &[u8], out: &mut Vec<ImportEdge>) {
             out.push(ImportEdge {
                 source_path: std::path::PathBuf::new(),
                 target_raw: raw,
+                resolved_path: None,
                 kind: ImportKind::Use,
                 line: node.start_position().row as u32 + 1,
             });

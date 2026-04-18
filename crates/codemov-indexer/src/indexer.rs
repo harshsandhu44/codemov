@@ -107,6 +107,7 @@ pub fn index(
             Ok(mut edges) => {
                 for e in &mut edges {
                     e.source_path = entry.path.clone();
+                    e.resolved_path = resolve_import(&entry.path, &e.target_raw);
                 }
                 edges
             }
@@ -141,4 +142,41 @@ pub fn index(
 
 fn hex_hash(data: &[u8]) -> String {
     blake3::hash(data).to_hex().to_string()
+}
+
+/// Resolve a relative TS/JS import to an absolute file path.
+/// Returns None for non-relative imports (packages, Rust use paths, etc.).
+fn resolve_import(source_path: &Path, target_raw: &str) -> Option<std::path::PathBuf> {
+    if !target_raw.starts_with("./") && !target_raw.starts_with("../") {
+        return None;
+    }
+    let dir = source_path.parent()?;
+    let base = dir.join(target_raw);
+
+    // If the import already has a known extension, try it directly.
+    if let Some(ext) = base.extension() {
+        if matches!(ext.to_str(), Some("ts" | "tsx" | "js" | "jsx" | "mjs")) {
+            if base.is_file() {
+                return base.canonicalize().ok();
+            }
+        }
+    }
+
+    // Probe extensions in priority order.
+    for ext in ["ts", "tsx", "js", "jsx", "mjs"] {
+        let candidate = base.with_extension(ext);
+        if candidate.is_file() {
+            return candidate.canonicalize().ok();
+        }
+    }
+
+    // Try index file inside a directory.
+    for ext in ["ts", "tsx", "js"] {
+        let candidate = base.join("index").with_extension(ext);
+        if candidate.is_file() {
+            return candidate.canonicalize().ok();
+        }
+    }
+
+    None
 }

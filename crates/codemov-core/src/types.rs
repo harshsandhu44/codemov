@@ -152,6 +152,9 @@ impl ImportKind {
 pub struct ImportEdge {
     pub source_path: PathBuf,
     pub target_raw: String,
+    /// Absolute path to the imported file if it could be resolved; None for
+    /// non-relative or unresolvable imports (e.g. Rust `use` paths, npm packages).
+    pub resolved_path: Option<PathBuf>,
     pub kind: ImportKind,
     pub line: u32,
 }

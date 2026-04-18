@@ -141,6 +141,53 @@ pub fn find_symbol(root: &Path, query: &str, json: bool) -> Result<(), CliError>
     Ok(())
 }
 
+pub fn trace_impact(root: &Path, file: &Path, json: bool) -> Result<(), CliError> {
+    let store = open_store(root)?;
+
+    // Resolve file to absolute path.
+    let abs_file = if file.is_absolute() {
+        file.to_path_buf()
+    } else {
+        root.canonicalize()?.join(file)
+    };
+    let abs_file = abs_file
+        .canonicalize()
+        .map_err(|_| CliError::Other(format!("file not found: {}", abs_file.display())))?;
+
+    let deps = store.get_dependencies(&abs_file)?;
+    let dependents = store.get_dependents(&abs_file)?;
+
+    if json {
+        let out = serde_json::json!({
+            "file": abs_file,
+            "dependencies": deps,
+            "dependents": dependents,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+    } else {
+        println!("file: {}", abs_file.display());
+        println!();
+        if deps.is_empty() {
+            println!("dependencies: (none resolved)");
+        } else {
+            println!("dependencies:");
+            for p in &deps {
+                println!("  {}", p.display());
+            }
+        }
+        println!();
+        if dependents.is_empty() {
+            println!("dependents: (none)");
+        } else {
+            println!("dependents:");
+            for p in &dependents {
+                println!("  {}", p.display());
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn overview(root: &Path, json: bool) -> Result<(), CliError> {
     let store = open_store(root)?;
     let overview = store.get_overview()?;
