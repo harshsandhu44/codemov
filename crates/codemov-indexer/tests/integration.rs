@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
 
-use codemov_core::SymbolKind;
+use codemov_core::{ImportKind, Language, SymbolKind};
 use codemov_indexer::{index, IndexOptions};
 use codemov_storage::Store;
 
@@ -198,4 +198,131 @@ fn find_symbol_result_is_stable() {
     let names_first: Vec<&str> = first.iter().map(|m| m.name.as_str()).collect();
     let names_second: Vec<&str> = second.iter().map(|m| m.name.as_str()).collect();
     assert_eq!(names_first, names_second, "results must be deterministic");
+}
+
+#[test]
+fn golden_mixed_basic_symbols() {
+    let fixture = fixture_path("mixed-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    let stats = index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    assert_eq!(stats.errors, 0);
+    assert_eq!(stats.files_indexed, 2, "one .rs + one .ts");
+
+    let rs_path = fixture.join("src/main.rs");
+    let rs_syms = store.get_symbols_for_file(&rs_path).unwrap();
+    let rs_names: Vec<&str> = rs_syms.iter().map(|s| s.name.as_str()).collect();
+    assert!(rs_names.contains(&"Greeter"), "missing struct Greeter");
+    assert!(rs_names.contains(&"run"), "missing fn run");
+
+    let ts_path = fixture.join("src/config.ts");
+    let ts_syms = store.get_symbols_for_file(&ts_path).unwrap();
+    let ts_names: Vec<&str> = ts_syms.iter().map(|s| s.name.as_str()).collect();
+    assert!(ts_names.contains(&"AppConfig"), "missing interface AppConfig");
+    assert!(ts_names.contains(&"loadConfig"), "missing fn loadConfig");
+    assert!(ts_names.contains(&"DEFAULT_PORT"), "missing const DEFAULT_PORT");
+}
+
+#[test]
+fn import_edges_rust_basic() {
+    let fixture = fixture_path("rust-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    let lib_path = fixture.join("src/lib.rs");
+    let edges = store.get_import_edges_for_file(&lib_path).unwrap();
+
+    assert!(!edges.is_empty(), "expected at least one import edge");
+    let targets: Vec<&str> = edges.iter().map(|e| e.target_raw.as_str()).collect();
+    assert!(
+        targets.iter().any(|t| t.contains("HashMap")),
+        "expected use of HashMap; got: {:?}",
+        targets
+    );
+    assert!(
+        edges.iter().all(|e| e.kind == ImportKind::Use),
+        "all Rust edges should be Use kind"
+    );
+    assert!(
+        edges.iter().all(|e| e.line > 0),
+        "all edges should have a valid line number"
+    );
+}
+
+#[test]
+fn import_edges_ts_basic() {
+    let fixture = fixture_path("ts-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    let index_path = fixture.join("src/index.ts");
+    let edges = store.get_import_edges_for_file(&index_path).unwrap();
+    let targets: Vec<&str> = edges.iter().map(|e| e.target_raw.as_str()).collect();
+    assert!(
+        targets.contains(&"events"),
+        "expected import of 'events'; got: {:?}",
+        targets
+    );
+    assert!(
+        targets.contains(&"path"),
+        "expected import of 'path'; got: {:?}",
+        targets
+    );
+
+    let utils_path = fixture.join("src/utils.ts");
+    let utils_edges = store.get_import_edges_for_file(&utils_path).unwrap();
+    let utils_targets: Vec<&str> = utils_edges.iter().map(|e| e.target_raw.as_str()).collect();
+    assert!(
+        utils_targets.contains(&"./index"),
+        "expected import of './index'; got: {:?}",
+        utils_targets
+    );
+}
+
+#[test]
+fn overview_json_shape() {
+    let fixture = fixture_path("ts-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    let overview = store.get_overview().unwrap();
+    assert_eq!(overview.total_files, 2);
+    assert!(overview.total_symbols >= 6);
+    assert!(overview.files_by_language.contains_key("typescript"));
+    assert_eq!(overview.files_by_language["typescript"], 2);
+
+    let json = serde_json::to_string(&overview).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert!(v.get("total_files").is_some());
+    assert!(v.get("total_symbols").is_some());
+    assert!(v.get("files_by_language").is_some());
+    assert!(v.get("symbols_by_language").is_some());
+}
+
+#[test]
+fn stats_json_shape() {
+    let fixture = fixture_path("rust-basic");
+    let db = tempfile::NamedTempFile::new().unwrap();
+    let mut store = Store::open(db.path()).unwrap();
+    index(&fixture, &mut store, &IndexOptions::default()).unwrap();
+
+    let file_stats = store.get_file_stats().unwrap();
+    assert_eq!(file_stats.len(), 1);
+
+    let f = &file_stats[0];
+    assert_eq!(f.language, Language::Rust);
+    assert!(f.symbol_count >= 6);
+    assert!(f.byte_size > 0);
+
+    let json = serde_json::to_string(&file_stats).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let entry = &v[0];
+    assert!(entry.get("path").is_some());
+    assert!(entry.get("language").is_some());
+    assert!(entry.get("byte_size").is_some());
+    assert!(entry.get("symbol_count").is_some());
 }
