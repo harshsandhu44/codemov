@@ -2,7 +2,7 @@
 
 Local codebase indexing and context-compression engine.
 
-Indexes source files, extracts symbols and import relationships, and stores results in a local SQLite database. Built as a CLI-first Rust tool — MCP integration planned for a later phase.
+Indexes source files, extracts symbols and import relationships, and stores results in a local SQLite database. Includes a local read-only MCP server for use with Claude Code and other MCP clients.
 
 ## Install
 
@@ -143,6 +143,65 @@ dependencies:
 dependents: (none)
 ```
 
+## MCP server
+
+codemov exposes a local, read-only MCP server over stdio. MCP clients (Claude Code, Gemini CLI, Codex, etc.) can use it to query the index without running CLI commands.
+
+### Install
+
+```sh
+cargo install --path crates/codemov-mcp
+```
+
+Or build locally:
+
+```sh
+cargo build --release -p codemov-mcp
+# binary: ./target/release/codemov-mcp
+```
+
+### Run
+
+The server reads from stdin and writes to stdout (JSON-RPC 2.0, newline-delimited):
+
+```sh
+codemov-mcp
+```
+
+The repo must be initialized and indexed before the server can respond to tool calls:
+
+```sh
+codemov init /path/to/repo
+codemov index /path/to/repo
+codemov-mcp
+```
+
+### Tools
+
+| Tool | Purpose | Required inputs |
+|------|---------|-----------------|
+| `repo_overview` | Language-level summary: file/symbol counts | `repo_path` |
+| `find_symbol` | Search symbols by name (ranked) | `repo_path`, `query` |
+| `trace_impact` | Direct dependencies and dependents of a file | `repo_path`, `file` |
+| `build_context_pack` | Ranked context pack within a token budget | `repo_path`, `task`, `target` |
+
+`task` values for `build_context_pack`: `explain` | `bugfix` | `feature` | `review`
+
+### Claude Code config
+
+Add to `.claude/mcp.json` (or your global MCP config):
+
+```json
+{
+  "mcpServers": {
+    "codemov": {
+      "command": "codemov-mcp",
+      "args": []
+    }
+  }
+}
+```
+
 ## Supported languages
 
 | Language | Extensions | Extracted symbols | Extracted imports |
@@ -162,6 +221,7 @@ crates/
   codemov-storage   SQLite persistence via rusqlite (files, symbols, import_edges)
   codemov-indexer   file walker, language detection, indexing pipeline
   codemov-cli       clap-based CLI binary
+  codemov-mcp       stdio MCP server (thin adapter over codemov-storage)
 
 fixtures/
   rust-basic/       stable Rust fixture repo for deterministic tests
