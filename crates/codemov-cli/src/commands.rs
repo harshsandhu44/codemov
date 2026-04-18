@@ -1,7 +1,8 @@
 use std::path::{Path, PathBuf};
 
+use codemov_core::TaskType;
 use codemov_indexer::{index as run_index, IndexOptions};
-use codemov_storage::Store;
+use codemov_storage::{build_context_pack, ContextRequest, Store};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -185,6 +186,94 @@ pub fn trace_impact(root: &Path, file: &Path, json: bool) -> Result<(), CliError
             }
         }
     }
+    Ok(())
+}
+
+pub fn context(
+    root: &Path,
+    task_str: &str,
+    target: &str,
+    max_tokens: usize,
+    json: bool,
+) -> Result<(), CliError> {
+    let task: TaskType = task_str
+        .parse()
+        .map_err(|e: String| CliError::Other(e))?;
+    let store = open_store(root)?;
+    let req = ContextRequest {
+        task,
+        target,
+        max_tokens,
+        root,
+    };
+    let pack = build_context_pack(&store, &req)
+        .map_err(CliError::Store)?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&pack)?);
+        return Ok(());
+    }
+
+    // plain text output
+    println!("task:   {}", pack.task.as_str());
+    println!("target: {}", pack.target);
+    println!(
+        "tokens: {} / {} budget",
+        pack.estimated_total_tokens, pack.max_tokens
+    );
+
+    if !pack.selected_files.is_empty() {
+        println!("\nfiles ({}):", pack.selected_files.len());
+        for f in &pack.selected_files {
+            println!(
+                "  [{:.2}] {}  ({} tokens)  — {}",
+                f.score,
+                f.path.display(),
+                f.estimated_tokens,
+                f.why
+            );
+        }
+    }
+
+    if !pack.selected_symbols.is_empty() {
+        println!("\nsymbols ({}):", pack.selected_symbols.len());
+        for s in &pack.selected_symbols {
+            println!(
+                "  {:<20} {:<12} {}:{}-{}  — {}",
+                s.name,
+                s.kind.as_str(),
+                s.file.display(),
+                s.start_line,
+                s.end_line,
+                s.why
+            );
+        }
+    }
+
+    if !pack.snippets.is_empty() {
+        println!("\nsnippets ({}):", pack.snippets.len());
+        for sn in &pack.snippets {
+            println!(
+                "  {}:{}-{}  — {}",
+                sn.file.display(),
+                sn.start_line,
+                sn.end_line,
+                sn.why
+            );
+            for line in sn.code.lines() {
+                println!("    {line}");
+            }
+            println!();
+        }
+    }
+
+    if !pack.excluded.is_empty() {
+        println!("excluded ({}):", pack.excluded.len());
+        for ex in &pack.excluded {
+            println!("  {}  — {}", ex.name, ex.reason);
+        }
+    }
+
     Ok(())
 }
 

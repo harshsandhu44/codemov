@@ -76,6 +76,24 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Build a task-aware context pack under a token budget
+    Context {
+        /// Task type: explain | bugfix | feature | review
+        #[arg(long)]
+        task: String,
+        /// Target file path or symbol/text query
+        #[arg(long)]
+        target: String,
+        /// Maximum token budget
+        #[arg(long, default_value = "4000")]
+        max_tokens: usize,
+        /// Repo root (defaults to current directory)
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() {
@@ -88,6 +106,13 @@ fn main() {
         Command::Overview { path, json } => commands::overview(&path, json),
         Command::FindSymbol { query, path, json } => commands::find_symbol(&path, &query, json),
         Command::TraceImpact { file, path, json } => commands::trace_impact(&path, &file, json),
+        Command::Context {
+            task,
+            target,
+            max_tokens,
+            path,
+            json,
+        } => commands::context(&path, &task, &target, max_tokens, json),
     };
 
     if let Err(e) = result {
