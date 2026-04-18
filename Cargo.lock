@@ -213,6 +213,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "codemov-mcp"
+version = "0.1.0"
+dependencies = [
+ "codemov-core",
+ "codemov-indexer",
+ "codemov-storage",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "codemov-parser"
 version = "0.1.0"
 dependencies = [
