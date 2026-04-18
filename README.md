@@ -82,6 +82,24 @@ codemov overview [path]
 codemov overview [path] --json
 ```
 
+**Trace impact** — show direct import dependencies and dependents for a file:
+
+```sh
+codemov trace-impact <file> [-p path] [--json]
+```
+
+Reports which files the given file imports (dependencies) and which files import it (dependents), based on resolved relative import paths. Rust `use` paths and npm package imports are not resolved to files.
+
+```
+$ codemov trace-impact src/utils.ts
+file: /repo/src/utils.ts
+
+dependencies:
+  /repo/src/index.ts
+
+dependents: (none)
+```
+
 ## Supported languages
 
 | Language | Extensions | Extracted symbols | Extracted imports |
@@ -90,7 +108,7 @@ codemov overview [path] --json
 | TypeScript | `.ts`, `.tsx` | `function`, `class`, `interface`, `type`, exported arrow fns | `import`, re-export `from` |
 | JavaScript | `.js`, `.jsx`, `.mjs`, `.cjs` | same as TypeScript | `import`, `require()`, re-export `from` |
 
-Import edges are stored in the SQLite database and are the foundation for future dependency graph queries.
+Import edges are stored in the SQLite database. Relative TS/JS imports (`./`, `../`) are resolved to absolute file paths at index time, enabling the `trace-impact` command.
 
 ## Architecture
 
@@ -105,6 +123,7 @@ crates/
 fixtures/
   rust-basic/       stable Rust fixture repo for deterministic tests
   ts-basic/         stable TypeScript fixture repo for deterministic tests
+  mixed-basic/      mixed Rust + TypeScript fixture for multi-language tests
 ```
 
 ## Development
@@ -115,4 +134,4 @@ cargo test --workspace
 cargo fmt --all
 ```
 
-Tests cover symbol extraction, golden line-number assertions against fixture repos, incremental indexing determinism, import extraction, and `find-symbol` ranking.
+Tests cover symbol extraction, golden line-number assertions against fixture repos, incremental indexing determinism, import edge extraction, `find-symbol` ranking, resolved path graph queries, and JSON output shapes.
