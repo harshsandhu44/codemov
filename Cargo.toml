@@ -5,6 +5,7 @@ members = [
     "crates/codemov-storage",
     "crates/codemov-indexer",
     "crates/codemov-cli",
+    "crates/codemov-mcp",
 ]
 resolver = "2"
 
