@@ -1,0 +1,15 @@
+[package]
+name = "codemov-indexer"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+codemov-core = { path = "../codemov-core" }
+codemov-parser = { path = "../codemov-parser" }
+codemov-storage = { path = "../codemov-storage" }
+ignore = { workspace = true }
+blake3 = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

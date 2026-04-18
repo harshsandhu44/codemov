@@ -1,0 +1,11 @@
+[package]
+name = "codemov-parser"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+codemov-core = { path = "../codemov-core" }
+tree-sitter = { workspace = true }
+tree-sitter-rust = { workspace = true }
+tree-sitter-typescript = { workspace = true }
+thiserror = { workspace = true }

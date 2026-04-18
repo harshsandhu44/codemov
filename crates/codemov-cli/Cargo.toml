@@ -1,0 +1,16 @@
+[package]
+name = "codemov-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "codemov"
+path = "src/main.rs"
+
+[dependencies]
+codemov-core = { path = "../codemov-core" }
+codemov-indexer = { path = "../codemov-indexer" }
+codemov-storage = { path = "../codemov-storage" }
+clap = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

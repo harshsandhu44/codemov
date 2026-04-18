@@ -1,0 +1,10 @@
+[package]
+name = "codemov-storage"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+codemov-core = { path = "../codemov-core" }
+rusqlite = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

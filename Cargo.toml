@@ -1,0 +1,28 @@
+[workspace]
+members = [
+    "crates/codemov-core",
+    "crates/codemov-parser",
+    "crates/codemov-storage",
+    "crates/codemov-indexer",
+    "crates/codemov-cli",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+authors = ["Harsh Sandhu <me@harshsandhu.com>"]
+license = "MIT"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+tree-sitter = "0.22"
+tree-sitter-rust = "0.21"
+tree-sitter-typescript = "0.21"
+ignore = "0.4"
+blake3 = "1"
+thiserror = "1"
+tempfile = "3"
