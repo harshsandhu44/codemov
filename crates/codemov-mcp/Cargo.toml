@@ -12,12 +12,12 @@ name = "codemov-mcp"
 path = "src/main.rs"
 
 [dependencies]
-codemov-core = { path = "../codemov-core" }
-codemov-storage = { path = "../codemov-storage" }
+codemov-core = { workspace = true }
+codemov-storage = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
-codemov-indexer = { path = "../codemov-indexer" }
+codemov-indexer = { workspace = true }

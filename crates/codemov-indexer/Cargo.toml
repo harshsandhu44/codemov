@@ -8,9 +8,9 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-codemov-core = { path = "../codemov-core" }
-codemov-parser = { path = "../codemov-parser" }
-codemov-storage = { path = "../codemov-storage" }
+codemov-core = { workspace = true }
+codemov-parser = { workspace = true }
+codemov-storage = { workspace = true }
 ignore = { workspace = true }
 blake3 = { workspace = true }
 thiserror = { workspace = true }

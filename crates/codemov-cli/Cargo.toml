@@ -12,9 +12,9 @@ name = "codemov"
 path = "src/main.rs"
 
 [dependencies]
-codemov-core = { path = "../codemov-core" }
-codemov-indexer = { path = "../codemov-indexer" }
-codemov-storage = { path = "../codemov-storage" }
+codemov-core = { workspace = true }
+codemov-indexer = { workspace = true }
+codemov-storage = { workspace = true }
 clap = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
