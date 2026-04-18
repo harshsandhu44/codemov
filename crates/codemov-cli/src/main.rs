@@ -54,6 +54,17 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Search for symbols by name
+    FindSymbol {
+        /// Symbol name to search (exact, prefix, or substring)
+        query: String,
+        /// Repo root (defaults to current directory)
+        #[arg(short, long, default_value = ".")]
+        path: PathBuf,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() {
@@ -64,6 +75,7 @@ fn main() {
         Command::Index { path, full, json } => commands::index(&path, full, json),
         Command::Stats { path, json } => commands::stats(&path, json),
         Command::Overview { path, json } => commands::overview(&path, json),
+        Command::FindSymbol { query, path, json } => commands::find_symbol(&path, &query, json),
     };
 
     if let Err(e) = result {

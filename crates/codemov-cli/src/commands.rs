@@ -104,6 +104,43 @@ pub fn stats(root: &Path, json: bool) -> Result<(), CliError> {
     Ok(())
 }
 
+pub fn find_symbol(root: &Path, query: &str, json: bool) -> Result<(), CliError> {
+    let store = open_store(root)?;
+    let matches = store.find_symbols(query)?;
+
+    if json {
+        let out: Vec<_> = matches
+            .iter()
+            .map(|m| {
+                serde_json::json!({
+                    "name": m.name,
+                    "kind": m.kind.as_str(),
+                    "language": m.language.as_str(),
+                    "file": m.file_path,
+                    "start_line": m.start_line,
+                    "end_line": m.end_line,
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&out)?);
+    } else if matches.is_empty() {
+        println!("no symbols found matching {:?}", query);
+    } else {
+        for m in &matches {
+            println!(
+                "{:<20} {:<12} {:<12} {}:{}–{}",
+                m.name,
+                m.kind.as_str(),
+                m.language.as_str(),
+                m.file_path.display(),
+                m.start_line,
+                m.end_line,
+            );
+        }
+    }
+    Ok(())
+}
+
 pub fn overview(root: &Path, json: bool) -> Result<(), CliError> {
     let store = open_store(root)?;
     let overview = store.get_overview()?;
