@@ -127,3 +127,13 @@ pub struct IndexStats {
     pub errors: usize,
     pub duration_ms: u64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SymbolMatch {
+    pub name: String,
+    pub kind: SymbolKind,
+    pub language: Language,
+    pub file_path: PathBuf,
+    pub start_line: u32,
+    pub end_line: u32,
+}

@@ -2,7 +2,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use codemov_core::{FileStats, Language, RepoOverview, Symbol, SymbolKind};
+use codemov_core::{FileStats, Language, RepoOverview, Symbol, SymbolKind, SymbolMatch};
 use rusqlite::{params, Connection};
 use thiserror::Error;
 
@@ -207,6 +207,61 @@ impl Store {
             out.push(Symbol {
                 name,
                 kind,
+                start_line,
+                end_line,
+            });
+        }
+        Ok(out)
+    }
+
+    pub fn find_symbols(&self, query: &str) -> Result<Vec<SymbolMatch>, StoreError> {
+        // exact matches first, then prefix matches, then substring matches
+        let exact_pattern = query.to_string();
+        let prefix_pattern = format!("{query}%");
+        let substr_pattern = format!("%{query}%");
+
+        let mut stmt = self.conn.prepare(
+            "SELECT s.name, s.kind, s.start_line, s.end_line, f.path, f.language,
+                    CASE
+                        WHEN s.name = ?1 THEN 0
+                        WHEN s.name LIKE ?2 AND s.name != ?1 THEN 1
+                        ELSE 2
+                    END AS rank
+             FROM symbols s
+             JOIN files f ON f.id = s.file_id
+             WHERE s.name LIKE ?3
+             ORDER BY rank, s.name, f.path, s.start_line",
+        )?;
+
+        let rows = stmt.query_map(
+            rusqlite::params![exact_pattern, prefix_pattern, substr_pattern],
+            |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, u32>(2)?,
+                    r.get::<_, u32>(3)?,
+                    r.get::<_, String>(4)?,
+                    r.get::<_, String>(5)?,
+                ))
+            },
+        )?;
+
+        let mut out = Vec::new();
+        for row in rows {
+            let (name, kind_str, start_line, end_line, path, lang_str) = row?;
+            let kind = SymbolKind::from_str(&kind_str).unwrap_or(SymbolKind::Function);
+            let language = match lang_str.as_str() {
+                "rust" => Language::Rust,
+                "typescript" => Language::TypeScript,
+                "javascript" => Language::JavaScript,
+                _ => Language::Unknown,
+            };
+            out.push(SymbolMatch {
+                name,
+                kind,
+                language,
+                file_path: path.into(),
                 start_line,
                 end_line,
             });
