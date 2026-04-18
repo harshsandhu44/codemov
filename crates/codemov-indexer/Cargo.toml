@@ -1,7 +1,11 @@
 [package]
 name = "codemov-indexer"
+description = "Codebase indexer that walks and parses source files for codemov"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 codemov-core = { path = "../codemov-core" }

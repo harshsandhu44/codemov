@@ -1,7 +1,11 @@
 [package]
 name = "codemov-parser"
+description = "Tree-sitter based source code parser for codemov"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 codemov-core = { path = "../codemov-core" }

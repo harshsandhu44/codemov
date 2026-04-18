@@ -1,7 +1,11 @@
 [package]
 name = "codemov-mcp"
+description = "MCP server exposing codemov code intelligence tools"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [[bin]]
 name = "codemov-mcp"

@@ -1,7 +1,11 @@
 [package]
 name = "codemov-core"
+description = "Core types and abstractions for codemov"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 serde = { workspace = true }

@@ -1,7 +1,11 @@
 [package]
 name = "codemov-storage"
+description = "SQLite-backed symbol storage for codemov"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 codemov-core = { path = "../codemov-core" }
