@@ -22,3 +22,15 @@ CREATE TABLE IF NOT EXISTS symbols (
 
 pub const CREATE_IDX_SYMBOLS_FILE: &str =
     "CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file_id)";
+
+pub const CREATE_IMPORT_EDGES: &str = "
+CREATE TABLE IF NOT EXISTS import_edges (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    target_raw     TEXT    NOT NULL,
+    kind           TEXT    NOT NULL,
+    line           INTEGER NOT NULL
+)";
+
+pub const CREATE_IDX_IMPORT_SOURCE: &str =
+    "CREATE INDEX IF NOT EXISTS idx_import_source ON import_edges(source_file_id)";

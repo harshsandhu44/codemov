@@ -2,7 +2,9 @@ use std::path::Path;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use codemov_core::{FileStats, Language, RepoOverview, Symbol, SymbolKind, SymbolMatch};
+use codemov_core::{
+    FileStats, ImportEdge, ImportKind, Language, RepoOverview, Symbol, SymbolKind, SymbolMatch,
+};
 use rusqlite::{params, Connection};
 use thiserror::Error;
 
@@ -27,6 +29,8 @@ impl Store {
         conn.execute_batch(schema::CREATE_FILES)?;
         conn.execute_batch(schema::CREATE_SYMBOLS)?;
         conn.execute_batch(schema::CREATE_IDX_SYMBOLS_FILE)?;
+        conn.execute_batch(schema::CREATE_IMPORT_EDGES)?;
+        conn.execute_batch(schema::CREATE_IDX_IMPORT_SOURCE)?;
         Ok(Self { conn })
     }
 
@@ -209,6 +213,67 @@ impl Store {
                 kind,
                 start_line,
                 end_line,
+            });
+        }
+        Ok(out)
+    }
+
+    pub fn replace_import_edges(
+        &mut self,
+        file_id: i64,
+        edges: &[ImportEdge],
+    ) -> Result<(), StoreError> {
+        self.conn.execute(
+            "DELETE FROM import_edges WHERE source_file_id = ?1",
+            params![file_id],
+        )?;
+        let mut stmt = self.conn.prepare_cached(
+            "INSERT INTO import_edges (source_file_id, target_raw, kind, line)
+             VALUES (?1, ?2, ?3, ?4)",
+        )?;
+        for edge in edges {
+            stmt.execute(params![
+                file_id,
+                edge.target_raw,
+                edge.kind.as_str(),
+                edge.line
+            ])?;
+        }
+        Ok(())
+    }
+
+    pub fn get_import_edges_for_file(&self, path: &Path) -> Result<Vec<ImportEdge>, StoreError> {
+        let path_str = path.to_str().ok_or(StoreError::InvalidPath)?;
+        let file_id: i64 = self.conn.query_row(
+            "SELECT id FROM files WHERE path = ?1",
+            params![path_str],
+            |r| r.get(0),
+        )?;
+        let mut stmt = self.conn.prepare(
+            "SELECT target_raw, kind, line FROM import_edges WHERE source_file_id = ?1 ORDER BY line",
+        )?;
+        let rows = stmt.query_map(params![file_id], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, u32>(2)?,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (target_raw, kind_str, line) = row?;
+            let kind = match kind_str.as_str() {
+                "use" => ImportKind::Use,
+                "import" => ImportKind::Import,
+                "require" => ImportKind::Require,
+                "export" => ImportKind::Export,
+                _ => ImportKind::Import,
+            };
+            out.push(ImportEdge {
+                source_path: path.to_path_buf(),
+                target_raw,
+                kind,
+                line,
             });
         }
         Ok(out)

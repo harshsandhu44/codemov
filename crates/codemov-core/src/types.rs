@@ -128,6 +128,34 @@ pub struct IndexStats {
     pub duration_ms: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ImportKind {
+    Use,
+    Import,
+    Require,
+    Export,
+}
+
+impl ImportKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ImportKind::Use => "use",
+            ImportKind::Import => "import",
+            ImportKind::Require => "require",
+            ImportKind::Export => "export",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportEdge {
+    pub source_path: PathBuf,
+    pub target_raw: String,
+    pub kind: ImportKind,
+    pub line: u32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SymbolMatch {
     pub name: String,
