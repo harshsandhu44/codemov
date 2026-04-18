@@ -13,11 +13,14 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    if: |
+      startsWith(github.event.head_commit.message, 'fix:') ||
+      startsWith(github.event.head_commit.message, 'feat:')
     concurrency:
       group: release-${{ github.ref }}
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
@@ -37,7 +40,7 @@ jobs:
       group: release-pr-${{ github.ref }}
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
