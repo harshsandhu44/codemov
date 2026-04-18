@@ -2,6 +2,84 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TaskType {
+    Explain,
+    Bugfix,
+    Feature,
+    Review,
+}
+
+impl TaskType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TaskType::Explain => "explain",
+            TaskType::Bugfix => "bugfix",
+            TaskType::Feature => "feature",
+            TaskType::Review => "review",
+        }
+    }
+}
+
+impl std::str::FromStr for TaskType {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "explain" => Ok(TaskType::Explain),
+            "bugfix" => Ok(TaskType::Bugfix),
+            "feature" => Ok(TaskType::Feature),
+            "review" => Ok(TaskType::Review),
+            _ => Err(format!("unknown task type: {s}; expected explain|bugfix|feature|review")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SelectedFile {
+    pub path: PathBuf,
+    pub score: f32,
+    pub why: String,
+    pub estimated_tokens: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SelectedSymbol {
+    pub name: String,
+    pub kind: SymbolKind,
+    pub file: PathBuf,
+    pub start_line: u32,
+    pub end_line: u32,
+    pub why: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Snippet {
+    pub file: PathBuf,
+    pub start_line: u32,
+    pub end_line: u32,
+    pub code: String,
+    pub why: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExcludedCandidate {
+    pub name: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextPack {
+    pub task: TaskType,
+    pub target: String,
+    pub max_tokens: usize,
+    pub estimated_total_tokens: usize,
+    pub selected_files: Vec<SelectedFile>,
+    pub selected_symbols: Vec<SelectedSymbol>,
+    pub snippets: Vec<Snippet>,
+    pub excluded: Vec<ExcludedCandidate>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Language {
