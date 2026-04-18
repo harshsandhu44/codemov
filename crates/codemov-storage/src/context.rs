@@ -91,7 +91,11 @@ fn collect_file_candidates(
         if let Ok(raw_syms) = store.get_symbols_for_file(db_path) {
             for s in raw_syms {
                 let score = sym_kind_score(s.kind, req.task);
-                syms.push((symbol_to_match(s, abs.clone()), score, "symbol in target file".to_string()));
+                syms.push((
+                    symbol_to_match(s, abs.clone()),
+                    score,
+                    "symbol in target file".to_string(),
+                ));
             }
         }
         add_edges(store, db_path, abs_root, abs_to_db, req.task, files, seen);
@@ -230,9 +234,7 @@ fn assemble_pack(
     let target_abs = file_candidates.first().map(|(p, _, _)| p.clone());
     let snippet_srcs: Vec<_> = selected_symbols
         .iter()
-        .filter(|s| {
-            !is_file || target_abs.as_ref().map_or(false, |tf| *tf == s.file)
-        })
+        .filter(|s| !is_file || target_abs.as_ref().map_or(false, |tf| *tf == s.file))
         .take(8)
         .map(|s| (s.file.clone(), s.start_line, s.end_line, s.why.clone()))
         .collect();
@@ -244,7 +246,13 @@ fn assemble_pack(
                 if budget >= t {
                     budget -= t;
                     total += t;
-                    snippets.push(Snippet { file, start_line: start, end_line: end, code, why });
+                    snippets.push(Snippet {
+                        file,
+                        start_line: start,
+                        end_line: end,
+                        code,
+                        why,
+                    });
                 } else {
                     excluded.push(ExcludedCandidate {
                         name: format!("{}:{start}-{end}", file.display()),
@@ -404,7 +412,12 @@ fn sym_why(query: &str, name: &str) -> String {
     }
 }
 
-fn read_snippet(file: &Path, start_line: u32, end_line: u32, padding: u32) -> std::io::Result<String> {
+fn read_snippet(
+    file: &Path,
+    start_line: u32,
+    end_line: u32,
+    padding: u32,
+) -> std::io::Result<String> {
     let content = std::fs::read_to_string(file)?;
     let lines: Vec<&str> = content.lines().collect();
     let total = lines.len() as u32;

@@ -196,9 +196,7 @@ pub fn context(
     max_tokens: usize,
     json: bool,
 ) -> Result<(), CliError> {
-    let task: TaskType = task_str
-        .parse()
-        .map_err(|e: String| CliError::Other(e))?;
+    let task: TaskType = task_str.parse().map_err(|e: String| CliError::Other(e))?;
     let store = open_store(root)?;
     let req = ContextRequest {
         task,
@@ -206,8 +204,7 @@ pub fn context(
         max_tokens,
         root,
     };
-    let pack = build_context_pack(&store, &req)
-        .map_err(CliError::Store)?;
+    let pack = build_context_pack(&store, &req).map_err(CliError::Store)?;
 
     if json {
         println!("{}", serde_json::to_string_pretty(&pack)?);

@@ -30,7 +30,9 @@ impl std::str::FromStr for TaskType {
             "bugfix" => Ok(TaskType::Bugfix),
             "feature" => Ok(TaskType::Feature),
             "review" => Ok(TaskType::Review),
-            _ => Err(format!("unknown task type: {s}; expected explain|bugfix|feature|review")),
+            _ => Err(format!(
+                "unknown task type: {s}; expected explain|bugfix|feature|review"
+            )),
         }
     }
 }
