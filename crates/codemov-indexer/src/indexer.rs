@@ -2,7 +2,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use codemov_core::IndexStats;
-use codemov_parser::extract_symbols;
+use codemov_parser::{extract_imports, extract_symbols};
 use codemov_storage::{Store, StoreError};
 use thiserror::Error;
 
@@ -101,6 +101,29 @@ pub fn index(
             );
             errors += 1;
             continue;
+        }
+
+        let imports = match extract_imports(&source, entry.language) {
+            Ok(mut edges) => {
+                for e in &mut edges {
+                    e.source_path = entry.path.clone();
+                }
+                edges
+            }
+            Err(e) => {
+                eprintln!(
+                    "warn: import extraction failed for {}: {e}",
+                    entry.path.display()
+                );
+                vec![]
+            }
+        };
+
+        if let Err(e) = store.replace_import_edges(file_id, &imports) {
+            eprintln!(
+                "warn: failed to store imports for {}: {e}",
+                entry.path.display()
+            );
         }
 
         files_indexed += 1;

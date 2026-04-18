@@ -2,7 +2,7 @@ pub mod rust;
 mod tests;
 pub mod typescript;
 
-use codemov_core::{Language, Symbol};
+use codemov_core::{ImportEdge, Language, Symbol};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -19,6 +19,16 @@ pub fn extract_symbols(source: &[u8], language: Language) -> Result<Vec<Symbol>,
     match language {
         Language::Rust => rust::extract(source),
         Language::TypeScript | Language::JavaScript => typescript::extract(source, language),
+        Language::Unknown => Ok(vec![]),
+    }
+}
+
+pub fn extract_imports(source: &[u8], language: Language) -> Result<Vec<ImportEdge>, ParseError> {
+    match language {
+        Language::Rust => rust::extract_imports(source),
+        Language::TypeScript | Language::JavaScript => {
+            typescript::extract_imports(source, language)
+        }
         Language::Unknown => Ok(vec![]),
     }
 }

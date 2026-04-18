@@ -1,4 +1,4 @@
-use codemov_core::{Language, Symbol, SymbolKind};
+use codemov_core::{ImportEdge, ImportKind, Language, Symbol, SymbolKind};
 use tree_sitter::Node;
 
 use crate::ParseError;
@@ -104,4 +104,87 @@ fn named(node: Node, source: &[u8], kind: SymbolKind, field: &str) -> Option<Sym
         start_line: node.start_position().row as u32 + 1,
         end_line: node.end_position().row as u32 + 1,
     })
+}
+
+pub fn extract_imports(
+    source: &[u8],
+    language: Language,
+) -> Result<Vec<ImportEdge>, crate::ParseError> {
+    let mut parser = tree_sitter::Parser::new();
+    let lang = match language {
+        Language::TypeScript => tree_sitter_typescript::language_typescript(),
+        _ => tree_sitter_typescript::language_tsx(),
+    };
+    parser
+        .set_language(&lang)
+        .map_err(|e| crate::ParseError::Parse(e.to_string()))?;
+    let tree = parser
+        .parse(source, None)
+        .ok_or_else(|| crate::ParseError::Parse("tree-sitter returned None".into()))?;
+
+    let mut edges = Vec::new();
+    collect_import_nodes(tree.root_node(), source, &mut edges);
+    Ok(edges)
+}
+
+fn collect_import_nodes(node: Node, source: &[u8], out: &mut Vec<ImportEdge>) {
+    match node.kind() {
+        "import_statement" => {
+            if let Some(src_node) = node.child_by_field_name("source") {
+                if let Ok(raw) = src_node.utf8_text(source) {
+                    let target = raw.trim_matches(|c| c == '\'' || c == '"').to_string();
+                    out.push(ImportEdge {
+                        source_path: std::path::PathBuf::new(),
+                        target_raw: target,
+                        kind: ImportKind::Import,
+                        line: node.start_position().row as u32 + 1,
+                    });
+                }
+            }
+        }
+        "export_statement" => {
+            // re-exports: export { ... } from "..."
+            if let Some(src_node) = node.child_by_field_name("source") {
+                if let Ok(raw) = src_node.utf8_text(source) {
+                    let target = raw.trim_matches(|c| c == '\'' || c == '"').to_string();
+                    out.push(ImportEdge {
+                        source_path: std::path::PathBuf::new(),
+                        target_raw: target,
+                        kind: ImportKind::Export,
+                        line: node.start_position().row as u32 + 1,
+                    });
+                }
+            }
+        }
+        "call_expression" => {
+            // require("...") calls
+            if let Some(fn_node) = node.child_by_field_name("function") {
+                if fn_node.utf8_text(source).ok() == Some("require") {
+                    if let Some(args) = node.child_by_field_name("arguments") {
+                        let mut cur = args.walk();
+                        for child in args.children(&mut cur) {
+                            if matches!(child.kind(), "string" | "template_string") {
+                                if let Ok(raw) = child.utf8_text(source) {
+                                    let target =
+                                        raw.trim_matches(|c| c == '\'' || c == '"').to_string();
+                                    out.push(ImportEdge {
+                                        source_path: std::path::PathBuf::new(),
+                                        target_raw: target,
+                                        kind: ImportKind::Require,
+                                        line: node.start_position().row as u32 + 1,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_import_nodes(child, source, out);
+    }
 }
