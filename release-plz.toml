@@ -1,0 +1,21 @@
+[workspace]
+# Derive changelogs from conventional commits
+changelog_config = "cliff.toml"
+
+[[package]]
+name = "codemov-core"
+
+[[package]]
+name = "codemov-parser"
+
+[[package]]
+name = "codemov-storage"
+
+[[package]]
+name = "codemov-indexer"
+
+[[package]]
+name = "codemov-cli"
+
+[[package]]
+name = "codemov-mcp"
